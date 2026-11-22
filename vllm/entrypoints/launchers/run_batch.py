@@ -538,11 +538,21 @@ async def batch_output_writer(
         yield f
         f.flush()
         logger.info("Uploading outputs to %s", path_or_url)
-        if isinstance(f, StringIO):
-            data = f.getvalue().strip().encode("utf-8")
-            await upload_data(path_or_url, data, from_file=False)
-        else:
-            await upload_data(path_or_url, f.name, from_file=True)
+        try:
+            if isinstance(f, StringIO):
+                data = f.getvalue().strip().encode("utf-8")
+                await upload_data(path_or_url, data, from_file=False)
+            else:
+                await upload_data(path_or_url, f.name, from_file=True)
+        except Exception:
+            fd, kept_path = tempfile.mkstemp(
+                suffix=".jsonl", prefix="unuploaded_batch_output_", dir=output_tmp_dir
+            )
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as kept:
+                f.seek(0)
+                shutil.copyfileobj(f, kept, _STAGING_CHUNK_SIZE)
+            logger.error("Failed to upload outputs; they were saved to %s", kept_path)
+            raise
 
 
 async def download_bytes_from_url(

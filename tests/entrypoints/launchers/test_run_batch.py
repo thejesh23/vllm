@@ -1735,6 +1735,32 @@ async def test_batch_output_writer_uploads_url_output_once(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("use_tmp_dir", [False, True])
+async def test_batch_output_writer_keeps_output_when_upload_fails(
+    tmp_path, monkeypatch, use_tmp_dir
+):
+    """A failed upload, e.g. an expired pre-signed URL, must not lose the batch."""
+
+    async def failing_upload_data(output_url, data_or_file, from_file):
+        raise Exception("Failed to upload file.\nStatus: 403")
+
+    monkeypatch.setattr(run_batch_module, "upload_data", failing_upload_data)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    tmp_dir = str(tmp_path) if use_tmp_dir else None
+    with pytest.raises(Exception, match="Status: 403"):
+        async with batch_output_writer(
+            "https://example.com/output.jsonl", tmp_dir
+        ) as output_file:
+            print("first", file=output_file)
+            print("second", file=output_file)
+
+    kept = list(tmp_path.iterdir())
+    assert len(kept) == 1
+    assert kept[0].read_text(encoding="utf-8") == "first\nsecond\n"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_batch_writes_responses_in_input_order(tmp_path, monkeypatch):
     """Responses follow the input order even when later requests finish first."""
     requests = _chat_requests(20)
