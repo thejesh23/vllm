@@ -4327,6 +4327,8 @@ class PrefixRepetitionRandomDataset(BenchmarkDataset):
             )
         if not getattr(self, "disable_shuffle", False):
             random.shuffle(requests)
+        for i, request in enumerate(requests):
+            request.request_id = request_id_prefix + str(i)
         return requests
 
 

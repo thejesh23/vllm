@@ -11,7 +11,10 @@ from vllm.benchmarks.datasets import (
     RandomDataset,
     RandomMultiModalDataset,
     SampleRequest,
+    get_samples,
 )
+from vllm.benchmarks.serve import add_cli_args
+from vllm.utils.argparse_utils import FlexibleArgumentParser
 
 
 @pytest.fixture(scope="session")
@@ -135,6 +138,28 @@ def test_random_dataset_different_seeds(
         output_len=p.output_len,
     )
     assert a != b
+
+
+@pytest.mark.benchmark
+def test_prefix_repetition_uses_request_id_prefix(
+    hf_tokenizer: PreTrainedTokenizerBase,
+) -> None:
+    """`vllm bench serve` sends `request_id` as `x-request-id`."""
+    parser = FlexibleArgumentParser()
+    add_cli_args(parser)
+    args = parser.parse_args(
+        [
+            "--model=openai-community/gpt2",
+            "--dataset-name=prefix_repetition",
+            "--num-prompts=4",
+            "--prefix-repetition-num-prefixes=2",
+            "--prefix-repetition-prefix-len=8",
+            "--prefix-repetition-suffix-len=4",
+            "--request-id-prefix=bench-abc-",
+        ]
+    )
+    samples = get_samples(args, hf_tokenizer)
+    assert [s.request_id for s in samples] == [f"bench-abc-{i}" for i in range(4)]
 
 
 # -----------------------------
